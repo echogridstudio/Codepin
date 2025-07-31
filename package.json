@@ -1,0 +1,254 @@
+{
+  "name": "codepin",
+  "displayName": "Codepin",
+  "description": "Pin code and notes for faster dev workflows",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.102.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onCommand:codepin.addPin",
+    "onCommand:codepin.addPinFolder",
+    "onCommand:codepin.openPin",
+    "onCommand:codepin.delete",
+    "onCommand:codepin.rename",
+    "onCommand:codepin.changeColor",
+    "onView:codepinView"
+  ],
+  "contributes": {
+    "configuration": {
+      "type": "object",
+      "title": "Codepin",
+      "properties": {
+        "codepin.showFullPath": {
+          "type": "boolean",
+          "default": false,
+          "description": "Show the full file path in pin labels"
+        },
+        "codepin.openPinOnClick": {
+        "type": "boolean",
+        "default": true,
+        "description": "Open pinned file when clicking the pin in the sidebar. Disable to only open with right-click menu."
+        }
+      }
+    },
+    "submenus": [
+      {
+        "id": "codepin.changeColorSubmenu",
+        "label": "Change Color"
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "codepin.addPin",
+        "key": "ctrl+alt+p",
+        "when": "editorTextFocus"
+      }
+    ],
+    "views": {
+      "explorer": [
+        {
+          "id": "codepinView",
+          "name": "Codepins"
+        }
+      ]
+    },
+    "menus": {
+      "editor/context": [
+        {
+          "command": "codepin.addPin",
+          "when": "editorTextFocus",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "submenu": "codepin.changeColorSubmenu",
+          "when": "view == codepinView && (viewItem == pinItem || viewItem == pinItemWithNote || viewItem == pinFolder || viewItem == pinFolderWithNote)",
+          "group": "navigation@5"
+        },
+        {
+          "command": "codepin.openPin",
+          "when": "view == codepinView && (viewItem == pinItem || viewItem == pinItemWithNote)",
+          "group": "navigation@1"
+        },
+        {
+          "command": "codepin.rename",
+          "when": "view == codepinView && (viewItem == pinItem || viewItem == pinItemWithNote || viewItem == pinFolder || viewItem == pinFolderWithNote)",
+          "group": "navigation@3"
+        },
+        {
+          "command": "codepin.delete",
+          "when": "view == codepinView && (viewItem == pinItem || viewItem == pinItemWithNote || viewItem == pinFolder || viewItem == pinFolderWithNote)",
+          "group": "navigation@6"
+        },
+        {
+          "command": "codepin.addNote",
+          "when": "view == codepinView && (viewItem == pinItem || viewItem == pinFolder)",
+          "group": "navigation@2"
+        },
+        {
+          "command": "codepin.editNote",
+          "when": "view == codepinView && (viewItem == pinItemWithNote || viewItem == pinFolderWithNote)",
+          "group": "navigation@2"
+        },
+        {
+          "command": "codepin.removeNote",
+          "when": "view == codepinView && (viewItem == pinItemWithNote || viewItem == pinFolderWithNote)",
+          "group": "navigation@3"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "codepin.addPinFolder",
+          "when": "view == codepinView",
+          "group": "navigation"
+        }
+      ],
+      "codepin.changeColorSubmenu": [
+        {
+          "command": "codepin.setColorBlue",
+          "when": "view == codepinView && (viewItem == pinItem || viewItem == pinItemWithNote || viewItem == pinFolder || viewItem == pinFolderWithNote)"
+        },
+        {
+          "command": "codepin.setColorGreen",
+          "when": "view == codepinView && (viewItem == pinItem || viewItem == pinItemWithNote || viewItem == pinFolder || viewItem == pinFolderWithNote)"
+        },
+        {
+          "command": "codepin.setColorPurple",
+          "when": "view == codepinView && (viewItem == pinItem || viewItem == pinItemWithNote || viewItem == pinFolder || viewItem == pinFolderWithNote)"
+        },
+        {
+          "command": "codepin.setColorRed",
+          "when": "view == codepinView && (viewItem == pinItem || viewItem == pinItemWithNote || viewItem == pinFolder || viewItem == pinFolderWithNote)"
+        },
+        {
+          "command": "codepin.setColorYellow",
+          "when": "view == codepinView && (viewItem == pinItem || viewItem == pinItemWithNote || viewItem == pinFolder || viewItem == pinFolderWithNote)"
+        },
+        {
+          "command": "codepin.setColorOrange",
+          "when": "view == codepinView && (viewItem == pinItem || viewItem == pinItemWithNote || viewItem == pinFolder || viewItem == pinFolderWithNote)"
+        },
+        {
+          "command": "codepin.setColorBrown",
+          "when": "view == codepinView && (viewItem == pinItem || viewItem == pinItemWithNote || viewItem == pinFolder || viewItem == pinFolderWithNote)"
+        },
+        {
+          "command": "codepin.setColorBlack",
+          "when": "view == codepinView && (viewItem == pinItem || viewItem == pinItemWithNote || viewItem == pinFolder || viewItem == pinFolderWithNote)"
+        },
+        {
+          "command": "codepin.setColorWhite",
+          "when": "view == codepinView && (viewItem == pinItem || viewItem == pinItemWithNote || viewItem == pinFolder || viewItem == pinFolderWithNote)"
+        }
+      ]
+    },
+    "commands": [
+      {
+        "command": "codepin.addPinFolder",
+        "title": "New Folder",
+        "icon": "$(new-folder)" 
+      },
+      {
+        "command": "codepin.setColorRed",
+        "title": "🔴 Red"
+      },
+      {
+        "command": "codepin.setColorBlue",
+        "title": "🔵 Blue"
+      },
+      {
+        "command": "codepin.setColorGreen",
+        "title": "🟢 Green"
+      },
+      {
+        "command": "codepin.setColorYellow",
+        "title": "🟡 Yellow"
+      },
+      {
+        "command": "codepin.setColorOrange",
+        "title": "🟠 Orange"
+      },
+      {
+        "command": "codepin.setColorBrown",
+        "title": "🟤 Brown"
+      },
+      {
+        "command": "codepin.setColorPurple",
+        "title": "🟣 Purple"
+      },
+      {
+        "command": "codepin.setColorBlack",
+        "title": "⚫ Black"
+      },
+      {
+        "command": "codepin.setColorWhite",
+        "title": "⚪ White"
+      },
+      {
+        "command": "codepin.addPin",
+        "title": "Add Code Pin"
+      },
+      {
+        "command": "codepin.openPin",
+        "title": "Open Pin"
+      },
+      {
+        "command": "codepin.delete",
+        "title": "Delete"
+      },
+      {
+        "command": "codepin.rename",
+        "title": "Rename"
+      },
+      {
+        "command": "codepin.addNote",
+        "title": "Add Note"
+      },
+      {
+        "command": "codepin.editNote",
+        "title": "Edit Note"
+      },
+      {
+        "command": "codepin.removeNote",
+        "title": "Remove Note"
+      }
+    ]
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run package",
+    "compile": "npm run check-types && npm run lint && node esbuild.js",
+    "watch": "npm-run-all -p watch:*",
+    "watch:esbuild": "node esbuild.js --watch",
+    "watch:tsc": "tsc --noEmit --watch --project tsconfig.json",
+    "package": "npm run check-types && npm run lint && node esbuild.js --production",
+    "compile-tests": "tsc -p . --outDir out",
+    "watch-tests": "tsc -p . -w --outDir out",
+    "pretest": "npm run compile-tests && npm run compile && npm run lint",
+    "check-types": "tsc --noEmit",
+    "lint": "eslint src",
+    "test": "vscode-test"
+  },
+  "devDependencies": {
+    "@types/mocha": "^10.0.10",
+    "@types/node": "20.x",
+    "@types/vscode": "^1.102.0",
+    "@typescript-eslint/eslint-plugin": "^8.31.1",
+    "@typescript-eslint/parser": "^8.31.1",
+    "@vscode/test-cli": "^0.0.11",
+    "@vscode/test-electron": "^2.5.2",
+    "esbuild": "^0.25.3",
+    "eslint": "^9.25.1",
+    "npm-run-all": "^4.1.5",
+    "typescript": "^5.8.3"
+  },
+  "dependencies": {
+    "@vscode/codicons": "^0.0.38",
+    "uuid": "^11.1.0"
+  }
+}
