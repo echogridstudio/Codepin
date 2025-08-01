@@ -33,6 +33,11 @@
         "type": "boolean",
         "default": true,
         "description": "Open pinned file when clicking the pin in the sidebar. Disable to only open with right-click menu."
+        },
+        "codepin.showTagColors": {
+        "type": "boolean",
+        "default": true,
+        "description": "Show colored icons for tags in the sidebar"
         }
       }
     },
@@ -40,6 +45,10 @@
       {
         "id": "codepin.changeColorSubmenu",
         "label": "Change Color"
+      },
+      { 
+        "id": "codepin.changeColorSubmenu", 
+        "label": "Change Color" 
       }
     ],
     "keybindings": [
@@ -100,13 +109,28 @@
           "command": "codepin.removeNote",
           "when": "view == codepinView && (viewItem == pinItemWithNote || viewItem == pinFolderWithNote)",
           "group": "navigation@3"
+        },
+        {
+          "command": "codepin.assignTag",
+          "when": "view == codepinView && (viewItem == pinItem || viewItem == pinItemWithNote || viewItem == pinFolder || viewItem == pinFolderWithNote)",
+          "group": "navigation@4"
         }
       ],
       "view/title": [
         {
           "command": "codepin.addPinFolder",
           "when": "view == codepinView",
-          "group": "navigation"
+          "group": "navigation@2"
+        },
+        {
+          "command": "codepin.tagManager",
+          "when": "view == codepinView",
+          "group": "navigation@1"
+        },
+        {
+          "command": "codepin.search",
+          "when": "view == codepinView",
+          "group": "navigation@0"
         }
       ],
       "codepin.changeColorSubmenu": [
@@ -150,9 +174,24 @@
     },
     "commands": [
       {
+        "command": "codepin.search",
+        "title": "Search Pins and Folders",
+        "icon": "$(search)"
+      },
+      {
+        "command": "codepin.assignTag",
+        "title": "Assign/Remove Tag",
+        "icon": "$(tag)"
+      },
+      {
         "command": "codepin.addPinFolder",
         "title": "New Folder",
         "icon": "$(new-folder)" 
+      },
+      {
+        "command": "codepin.tagManager",
+        "title": "Tag Manager",
+        "icon": "$(tag)" 
       },
       {
         "command": "codepin.setColorRed",

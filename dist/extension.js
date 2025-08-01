@@ -31,14 +31,45 @@ var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: tru
 var extension_exports = {};
 __export(extension_exports, {
   activate: () => activate,
+  colorToEmoji: () => colorToEmoji,
   deactivate: () => deactivate
 });
 module.exports = __toCommonJS(extension_exports);
 
 // src/pinProvider.ts
 var vscode = __toESM(require("vscode"));
+var fs2 = __toESM(require("fs"));
+var path2 = __toESM(require("path"));
+
+// src/tagManager.ts
 var fs = __toESM(require("fs"));
 var path = __toESM(require("path"));
+var TAGS_FILE = ".codepin.tags.json";
+function loadTags(workspaceRoot) {
+  const tagsPath = path.join(workspaceRoot, TAGS_FILE);
+  if (!fs.existsSync(tagsPath)) return [];
+  try {
+    const content = fs.readFileSync(tagsPath, "utf8");
+    return JSON.parse(content);
+  } catch {
+    return [];
+  }
+}
+function saveTags(workspaceRoot, tags) {
+  const tagsPath = path.join(workspaceRoot, TAGS_FILE);
+  fs.writeFileSync(tagsPath, JSON.stringify(tags, null, 2), "utf8");
+}
+
+// src/pinProvider.ts
+function buildTagLabel(tagIds, allTags) {
+  if (!tagIds?.length) return "";
+  const showTagColors = vscode.workspace.getConfiguration("codepin").get("showTagColors", true);
+  return "[" + tagIds.map((id) => {
+    const tag = allTags.find((t) => t.id === id);
+    if (!tag) return "";
+    return showTagColors ? `${colorToEmoji(tag.color)} ${tag.name}` : tag.name;
+  }).filter(Boolean).join(", ") + "]";
+}
 function buildPinTooltip(pin, lineText = "") {
   const showFullPath = vscode.workspace.getConfiguration("codepin").get("showFullPath", false);
   const relativeFile = pin.file.replace(/\\/g, "/");
@@ -56,7 +87,10 @@ function buildPinTooltip(pin, lineText = "") {
   if (lineText) {
     tooltip += `
 
- **Linetext:** ${lineText}`;
+ **Linetext:**
+\`\`\`
+${lineText}
+\`\`\``;
   }
   if (pin.note) {
     tooltip += `
@@ -80,16 +114,43 @@ function buildFolderTooltip(folder) {
   }
   return new vscode.MarkdownString(tooltip);
 }
+var MAX_TOOLTIP_LINES = 10;
+async function getPinLineText(pin, workspaceRoot) {
+  try {
+    const doc = await vscode.workspace.openTextDocument(path2.join(workspaceRoot, pin.file));
+    if (typeof pin.line === "number" && pin.line < doc.lineCount) {
+      return doc.lineAt(pin.line).text.trim();
+    } else if (Array.isArray(pin.line)) {
+      const startLine = Math.min(pin.line[0], pin.line[1]);
+      const endLine = Math.max(pin.line[0], pin.line[1]);
+      const lines = [];
+      for (let i = startLine; i <= endLine && i < doc.lineCount; i++) {
+        lines.push(doc.lineAt(i).text.trim());
+      }
+      let moreMsg = "";
+      if (lines.length > MAX_TOOLTIP_LINES) {
+        moreMsg = `
+...and ${lines.length - MAX_TOOLTIP_LINES} more lines`;
+      }
+      return lines.slice(0, MAX_TOOLTIP_LINES).join("\n") + moreMsg;
+    } else {
+      return "(Line missing)";
+    }
+  } catch {
+    return "(File missing)";
+  }
+}
 var PinProvider = class {
   constructor(workspaceRoot, extensionContext) {
     this.workspaceRoot = workspaceRoot;
     this.extensionContext = extensionContext;
-    this.teamFile = path.join(this.workspaceRoot, ".codepin.team.json");
-    this.localFile = path.join(this.workspaceRoot, ".codepin.local.json");
+    this.teamFile = path2.join(this.workspaceRoot, ".codepin.team.json");
+    this.localFile = path2.join(this.workspaceRoot, ".codepin.local.json");
     this.loadData();
   }
   dropMimeTypes = ["application/vnd.codepin.treeitem"];
   dragMimeTypes = ["application/vnd.codepin.treeitem"];
+  tags = [];
   teamFile;
   localFile;
   teamPins = [];
@@ -101,6 +162,7 @@ var PinProvider = class {
   pins = [];
   folders = [];
   refresh() {
+    this.tags = loadTags(this.workspaceRoot);
     this.loadData();
     this._onDidChangeTreeData.fire();
   }
@@ -108,11 +170,11 @@ var PinProvider = class {
     return element;
   }
   loadData() {
-    if (fs.existsSync(this.teamFile)) {
+    if (fs2.existsSync(this.teamFile)) {
       try {
-        const data = JSON.parse(fs.readFileSync(this.teamFile, "utf8"));
-        this.teamPins = (data.pins || []).map((p) => ({ ...p, type: "team" }));
-        this.teamFolders = (data.folders || []).map((f) => ({ ...f, type: "team" }));
+        const data = JSON.parse(fs2.readFileSync(this.teamFile, "utf8"));
+        this.teamPins = (data.pins || []).map((p) => ({ ...p, tags: Array.isArray(p.tags) ? p.tags : [], type: "team" }));
+        this.teamFolders = (data.folders || []).map((f) => ({ ...f, tags: Array.isArray(f.tags) ? f.tags : [], type: "team" }));
       } catch {
         this.teamPins = [];
         this.teamFolders = [];
@@ -121,11 +183,11 @@ var PinProvider = class {
       this.teamPins = [];
       this.teamFolders = [];
     }
-    if (fs.existsSync(this.localFile)) {
+    if (fs2.existsSync(this.localFile)) {
       try {
-        const data = JSON.parse(fs.readFileSync(this.localFile, "utf8"));
-        this.localPins = (data.pins || []).map((p) => ({ ...p, type: "local" }));
-        this.localFolders = (data.folders || []).map((f) => ({ ...f, type: "local" }));
+        const data = JSON.parse(fs2.readFileSync(this.localFile, "utf8"));
+        this.localPins = (data.pins || []).map((p) => ({ ...p, tags: Array.isArray(p.tags) ? p.tags : [], type: "local" }));
+        this.localFolders = (data.folders || []).map((f) => ({ ...f, tags: Array.isArray(f.tags) ? f.tags : [], type: "local" }));
       } catch {
         this.localPins = [];
         this.localFolders = [];
@@ -134,6 +196,26 @@ var PinProvider = class {
       this.localPins = [];
       this.localFolders = [];
     }
+  }
+  getParent(element) {
+    if (element.isFolder && element.folder) {
+      const rootLabel = element.folder.type === "team" ? "Team Pins" : "Local Pins";
+      const rootId = element.folder.type === "team" ? "codepin-team-root" : "codepin-local-root";
+      return new PinItem(rootLabel, vscode.TreeItemCollapsibleState.Expanded, void 0, void 0, true, rootId);
+    }
+    if (!element.isFolder && element.pin) {
+      const pin = element.pin;
+      if (pin.parentFolderId) {
+        const folder = (pin.type === "team" ? this.teamFolders : this.localFolders).find((f) => f.id === pin.parentFolderId);
+        if (folder) {
+          return new PinItem(folder.title, vscode.TreeItemCollapsibleState.Collapsed, void 0, folder, true);
+        }
+      }
+      const rootLabel = pin.type === "team" ? "Team Pins" : "Local Pins";
+      const rootId = pin.type === "team" ? "codepin-team-root" : "codepin-local-root";
+      return new PinItem(rootLabel, vscode.TreeItemCollapsibleState.Expanded, void 0, void 0, true, rootId);
+    }
+    return void 0;
   }
   async getChildren(element) {
     const openOnClick = vscode.workspace.getConfiguration("codepin").get("openPinOnClick", true);
@@ -162,14 +244,17 @@ var PinProvider = class {
     };
     if (!element) {
       return [
-        new PinItem("Team Pins", vscode.TreeItemCollapsibleState.Expanded, void 0, void 0, true),
-        new PinItem("Local Pins", vscode.TreeItemCollapsibleState.Expanded, void 0, void 0, true)
+        new PinItem("Team Pins", vscode.TreeItemCollapsibleState.Expanded, void 0, void 0, true, "codepin-team-root"),
+        new PinItem("Local Pins", vscode.TreeItemCollapsibleState.Expanded, void 0, void 0, true, "codepin-local-root")
       ];
     }
     if (element.label === "Team Pins") {
       const folders = this.teamFolders.sort((a, b) => (a.order ?? 0) - (b.order ?? 0)).map((f) => {
         let label = f.title;
         if (f.note) label = "\xB7 " + label;
+        if (f.tags && f.tags.length > 0) {
+          label += " " + buildTagLabel(f.tags, this.tags);
+        }
         const item = new PinItem(label, vscode.TreeItemCollapsibleState.Collapsed, void 0, f, true);
         const colorKey = f.color && colorToFolderIcon[f.color] ? f.color : "blue";
         item.iconPath = colorToFolderIcon[colorKey];
@@ -177,28 +262,19 @@ var PinProvider = class {
         return item;
       });
       const rootPins = await Promise.all(
-        this.teamPins.filter((p) => !p.parentFolderId).map(async (pin) => {
+        this.teamPins.filter((p) => !p.parentFolderId).sort((a, b) => (a.order ?? 0) - (b.order ?? 0)).map(async (pin) => {
           let label = pin.title;
           if (pin.note) label = "\xB7 " + label;
           if (showFullPath) {
             label += ` (${pin.file}:${typeof pin.line === "number" ? pin.line + 1 : "?"})`;
           }
+          if (pin.tags && pin.tags.length > 0) {
+            label += " " + buildTagLabel(pin.tags, this.tags);
+          }
           const item = new PinItem(label, vscode.TreeItemCollapsibleState.None, pin, void 0, false);
           const colorKey = pin.color && colorToIcon[pin.color] ? pin.color : "red";
           item.iconPath = colorToIcon[colorKey];
-          let lineText = "";
-          try {
-            const doc = await vscode.workspace.openTextDocument(path.join(this.workspaceRoot, pin.file));
-            if (typeof pin.line === "number" && pin.line < doc.lineCount) {
-              lineText = doc.lineAt(pin.line).text.trim();
-            } else if (Array.isArray(pin.line) && pin.line[0] < doc.lineCount) {
-              lineText = doc.lineAt(pin.line[0]).text.trim();
-            } else {
-              lineText = "(Line missing)";
-            }
-          } catch {
-            lineText = "(File missing)";
-          }
+          const lineText = await getPinLineText(pin, this.workspaceRoot);
           item.tooltip = buildPinTooltip(pin, lineText);
           if (openOnClick) {
             item.command = {
@@ -216,6 +292,9 @@ var PinProvider = class {
       const folders = this.localFolders.sort((a, b) => (a.order ?? 0) - (b.order ?? 0)).map((f) => {
         let label = f.title;
         if (f.note) label = "\xB7 " + label;
+        if (f.tags && f.tags.length > 0) {
+          label += " " + buildTagLabel(f.tags, this.tags);
+        }
         const item = new PinItem(label, vscode.TreeItemCollapsibleState.Collapsed, void 0, f, true);
         const colorKey = f.color && colorToFolderIcon[f.color] ? f.color : "blue";
         item.iconPath = colorToFolderIcon[colorKey];
@@ -223,28 +302,19 @@ var PinProvider = class {
         return item;
       });
       const rootPins = await Promise.all(
-        this.localPins.filter((p) => !p.parentFolderId).map(async (pin) => {
+        this.localPins.filter((p) => !p.parentFolderId).sort((a, b) => (a.order ?? 0) - (b.order ?? 0)).map(async (pin) => {
           let label = pin.title;
           if (pin.note) label = "\xB7 " + label;
           if (showFullPath) {
             label += ` (${pin.file}:${typeof pin.line === "number" ? pin.line + 1 : "?"})`;
           }
+          if (pin.tags && pin.tags.length > 0) {
+            label += " " + buildTagLabel(pin.tags, this.tags);
+          }
           const item = new PinItem(label, vscode.TreeItemCollapsibleState.None, pin, void 0, false);
           const colorKey = pin.color && colorToIcon[pin.color] ? pin.color : "red";
           item.iconPath = colorToIcon[colorKey];
-          let lineText = "";
-          try {
-            const doc = await vscode.workspace.openTextDocument(path.join(this.workspaceRoot, pin.file));
-            if (typeof pin.line === "number" && pin.line < doc.lineCount) {
-              lineText = doc.lineAt(pin.line).text.trim();
-            } else if (Array.isArray(pin.line) && pin.line[0] < doc.lineCount) {
-              lineText = doc.lineAt(pin.line[0]).text.trim();
-            } else {
-              lineText = "(Line missing)";
-            }
-          } catch {
-            lineText = "(File missing)";
-          }
+          const lineText = await getPinLineText(pin, this.workspaceRoot);
           item.tooltip = buildPinTooltip(pin, lineText);
           if (openOnClick) {
             item.command = {
@@ -263,28 +333,19 @@ var PinProvider = class {
       const isTeam = folder.type === "team";
       const pinArray = isTeam ? this.teamPins : this.localPins;
       const pinsInFolder = await Promise.all(
-        pinArray.filter((p) => p.parentFolderId === folder.id).map(async (pin) => {
+        pinArray.filter((p) => p.parentFolderId === folder.id).sort((a, b) => (a.order ?? 0) - (b.order ?? 0)).map(async (pin) => {
           let label = pin.title;
           if (pin.note) label = "\xB7 " + label;
           if (showFullPath) {
             label += ` (${pin.file}:${typeof pin.line === "number" ? pin.line + 1 : "?"})`;
           }
+          if (pin.tags && pin.tags.length > 0) {
+            label += " " + buildTagLabel(pin.tags, this.tags);
+          }
           const item = new PinItem(label, vscode.TreeItemCollapsibleState.None, pin, void 0, false);
           const colorKey = pin.color && colorToIcon[pin.color] ? pin.color : "red";
           item.iconPath = colorToIcon[colorKey];
-          let lineText = "";
-          try {
-            const doc = await vscode.workspace.openTextDocument(path.join(this.workspaceRoot, pin.file));
-            if (typeof pin.line === "number" && pin.line < doc.lineCount) {
-              lineText = doc.lineAt(pin.line).text.trim();
-            } else if (Array.isArray(pin.line) && pin.line[0] < doc.lineCount) {
-              lineText = doc.lineAt(pin.line[0]).text.trim();
-            } else {
-              lineText = "(Line missing)";
-            }
-          } catch {
-            lineText = "(File missing)";
-          }
+          const lineText = await getPinLineText(pin, this.workspaceRoot);
           item.tooltip = buildPinTooltip(pin, lineText);
           if (openOnClick) {
             item.command = {
@@ -309,25 +370,42 @@ var PinProvider = class {
   movePinRelativeToPin(movedPin, targetPin, pins) {
     if (movedPin.parentFolderId !== targetPin.parentFolderId) return;
     const parentId = movedPin.parentFolderId || null;
-    const pinsInParent = this.pins.filter(
-      (p) => (p.parentFolderId || null) === parentId
-    );
-    const withoutMoved = pinsInParent.filter((p) => p.id !== movedPin.id);
-    const idx = withoutMoved.findIndex((p) => p.id === targetPin.id);
-    withoutMoved.splice(idx + 1, 0, movedPin);
-    this.pins = [
-      ...this.pins.filter((p) => (p.parentFolderId || null) !== parentId),
-      ...withoutMoved
-    ];
+    let pinsInParent = pins.filter((p) => (p.parentFolderId || null) === parentId);
+    pinsInParent = pinsInParent.filter((p) => p.id !== movedPin.id);
+    const idx = pinsInParent.findIndex((p) => p.id === targetPin.id);
+    pinsInParent.splice(idx + 1, 0, movedPin);
+    pinsInParent.forEach((p, i) => {
+      p.order = i;
+    });
+    for (const pin of pins) {
+      if ((pin.parentFolderId || null) === parentId) {
+        const updated = pinsInParent.find((p) => p.id === pin.id);
+        if (updated) {
+          Object.assign(pin, updated);
+        }
+      }
+    }
+  }
+  getPinItemForFolder(folder) {
+    return new PinItem(folder.title, vscode.TreeItemCollapsibleState.Collapsed, void 0, folder, true);
+  }
+  getPinItemForPin(pin) {
+    let label = pin.title;
+    if (pin.note) label = "\xB7 " + label;
+    return new PinItem(label, vscode.TreeItemCollapsibleState.None, pin, void 0, false);
   }
   moveFolderRelativeToFolder(movedFolder, targetFolder, folders) {
-    const withoutMoved = this.folders.filter((f) => f.id !== movedFolder.id);
+    const withoutMoved = folders.filter((f) => f.id !== movedFolder.id);
     const idx = withoutMoved.findIndex((f) => f.id === targetFolder.id);
     withoutMoved.splice(idx + 1, 0, movedFolder);
-    this.folders = withoutMoved;
-    this.folders.forEach((folder, idx2) => {
+    withoutMoved.forEach((folder, idx2) => {
       folder.order = idx2;
     });
+    for (let i = 0; i < withoutMoved.length; i++) {
+      const folder = withoutMoved[i];
+      const original = folders.find((f) => f.id === folder.id);
+      if (original) original.order = folder.order;
+    }
   }
   async handleDrag(source, dataTransfer, token) {
     const type = source[0].pin?.type || source[0].folder?.type;
@@ -363,31 +441,32 @@ var PinProvider = class {
       }
     }
     const filePath = type === "team" ? this.teamFile : this.localFile;
-    fs.writeFileSync(filePath, JSON.stringify({ pins, folders }, null, 2), "utf8");
+    fs2.writeFileSync(filePath, JSON.stringify({ pins, folders }, null, 2), "utf8");
     this.refresh();
   }
 };
 var PinItem = class extends vscode.TreeItem {
-  constructor(label, collapsibleState, pin, folder, isFolder = false) {
+  constructor(label, collapsibleState, pin, folder, isFolder = false, explicitId) {
     super(label, collapsibleState);
     this.label = label;
     this.collapsibleState = collapsibleState;
     this.pin = pin;
     this.folder = folder;
     this.isFolder = isFolder;
+    this.explicitId = explicitId;
     if (isFolder) {
       this.contextValue = folder?.note ? "pinFolderWithNote" : "pinFolder";
     } else {
       this.contextValue = pin?.note ? "pinItemWithNote" : "pinItem";
     }
-    this.id = isFolder && folder ? folder.id : pin?.id || "";
+    this.id = explicitId || (isFolder && folder ? folder.id : pin?.id || "");
   }
 };
 
 // src/extension.ts
 var vscode2 = __toESM(require("vscode"));
-var fs2 = __toESM(require("fs"));
-var path2 = __toESM(require("path"));
+var fs3 = __toESM(require("fs"));
+var path3 = __toESM(require("path"));
 
 // node_modules/uuid/dist/esm/stringify.js
 var byteToHex = [];
@@ -451,43 +530,270 @@ function activate(context) {
   let lastDeleted = null;
   const pinProvider = new PinProvider(workspaceFolder, context);
   vscode2.workspace.onDidChangeConfiguration((e) => {
-    if (e.affectsConfiguration("codepin.showFullPath") || e.affectsConfiguration("codepin.openPinOnClick")) {
+    if (e.affectsConfiguration("codepin.showFullPath") || e.affectsConfiguration("codepin.openPinOnClick") || e.affectsConfiguration("codepin.showTagColors")) {
       pinProvider.refresh();
     }
   });
   const treeView = vscode2.window.createTreeView("codepinView", {
     treeDataProvider: pinProvider,
     canSelectMany: true,
-    dragAndDropController: pinProvider
+    dragAndDropController: pinProvider,
+    showCollapseAll: true
   });
   context.subscriptions.push(treeView);
+  pinProvider.refresh();
+  context.subscriptions.push(
+    vscode2.commands.registerCommand("codepin.search", async () => {
+      const allPins = [...pinProvider.teamPins, ...pinProvider.localPins];
+      const allFolders = [...pinProvider.teamFolders, ...pinProvider.localFolders];
+      searchPinsAndFoldersQuickInput(allPins, allFolders, async (pin, folder) => {
+        if (pin) {
+          const pinItem = pinProvider.getPinItemForPin(pin);
+          try {
+            await treeView.reveal(pinItem, { expand: true, select: true, focus: true });
+          } catch (err) {
+            vscode2.window.showWarningMessage("Could not reveal pin in tree");
+          }
+          vscode2.commands.executeCommand("codepin.openPin", { pin });
+        } else if (folder) {
+          const pinItem = pinProvider.getPinItemForFolder(folder);
+          try {
+            await treeView.reveal(pinItem, { expand: true, select: true, focus: true });
+          } catch (err) {
+            vscode2.window.showWarningMessage("Could not reveal folder in tree");
+          }
+        }
+      });
+    })
+  );
+  context.subscriptions.push(
+    vscode2.commands.registerCommand("codepin.assignTag", async (item) => {
+      if (!workspaceFolder) {
+        vscode2.window.showWarningMessage("No workspace open.");
+        return;
+      }
+      const tags = loadTags(workspaceFolder);
+      if (!tags.length) {
+        vscode2.window.showInformationMessage("No tags defined yet! Use the Tag Manager in the titlebar to add some.");
+        return;
+      }
+      let currentTags = [];
+      if (item.isFolder && item.folder && Array.isArray(item.folder.tags)) {
+        currentTags = item.folder.tags;
+      } else if (item.pin && Array.isArray(item.pin.tags)) {
+        currentTags = item.pin.tags;
+      }
+      const pickItems = tags.map((tag) => ({
+        label: `${colorToEmoji(tag.color)} ${tag.name}`,
+        picked: currentTags.includes(tag.id),
+        id: tag.id
+      }));
+      const picked = await vscode2.window.showQuickPick(pickItems, {
+        placeHolder: "Assign or remove tags (multi-select)",
+        canPickMany: true
+      });
+      if (!picked) return;
+      const selectedTagIds = picked.map((p) => p.id);
+      const isTeam = item.pin?.type === "team" || item.folder?.type === "team";
+      const pinFilePath = isTeam ? path3.join(workspaceFolder, ".codepin.team.json") : path3.join(workspaceFolder, ".codepin.local.json");
+      if (!fs3.existsSync(pinFilePath)) return;
+      let pins = [];
+      let folders = [];
+      try {
+        const raw = fs3.readFileSync(pinFilePath, "utf8");
+        const parsed = JSON.parse(raw);
+        pins = parsed.pins || [];
+        folders = parsed.folders || [];
+      } catch {
+        return;
+      }
+      let changed = false;
+      if (item.isFolder && item.folder) {
+        folders = folders.map(
+          (f) => f.id === item.folder.id ? { ...f, tags: selectedTagIds } : f
+        );
+        changed = true;
+      } else if (item.pin) {
+        pins = pins.map(
+          (p) => p.id === item.pin.id ? { ...p, tags: selectedTagIds } : p
+        );
+        changed = true;
+      }
+      if (changed) {
+        fs3.writeFileSync(pinFilePath, JSON.stringify({ pins, folders }, null, 2), "utf8");
+        pinProvider.refresh?.();
+      }
+    })
+  );
+  context.subscriptions.push(
+    vscode2.commands.registerCommand("codepin.tagManager", async () => {
+      if (!workspaceFolder) {
+        vscode2.window.showWarningMessage("No workspace open.");
+        return;
+      }
+      const tags = loadTags(workspaceFolder);
+      const items = [
+        { label: "$(add) Add Tag", alwaysShow: true, id: "" }
+      ];
+      if (tags.length > 0) {
+        items.push(...tags.map((tag) => ({
+          label: `${colorToEmoji(tag.color)} ${tag.name}`,
+          description: "",
+          // optional
+          detail: "",
+          // optional
+          id: tag.id
+        })));
+      }
+      const picked = await vscode2.window.showQuickPick(items, {
+        placeHolder: "Tag Manager: Add, rename, or delete tags"
+      });
+      if (!picked) return;
+      if (picked.label === "$(add) Add Tag") {
+        const name = await vscode2.window.showInputBox({
+          prompt: "Enter a tag name",
+          validateInput: (input) => {
+            if (!input.trim()) return "Tag name cannot be empty";
+            if (tags.some((tag) => tag.name.toLowerCase() === input.trim().toLowerCase())) {
+              return "Tag already exists";
+            }
+            return null;
+          }
+        });
+        if (!name) return;
+        const color = await vscode2.window.showQuickPick(
+          [
+            { label: "\u{1F7E5} Red", value: "red" },
+            { label: "\u{1F7E8} Yellow", value: "yellow" },
+            { label: "\u{1F7E6} Blue", value: "blue" },
+            { label: "\u{1F7E9} Green", value: "green" },
+            { label: "\u{1F7EA} Purple", value: "purple" },
+            { label: "\u{1F7E7} Orange", value: "orange" },
+            { label: "\u{1F7EB} Brown", value: "brown" },
+            { label: "\u2B1B Black", value: "black" },
+            { label: "\u2B1C White", value: "white" }
+          ],
+          { placeHolder: "Choose a tag color" }
+        );
+        if (!color) return;
+        const newTag = {
+          id: v4_default(),
+          name: name.trim(),
+          color: color.value
+        };
+        const newTags = [...tags, newTag];
+        saveTags(workspaceFolder, newTags);
+        pinProvider.refresh();
+        vscode2.window.showInformationMessage(`Tag "${name.trim()}" added!`);
+        await vscode2.commands.executeCommand("codepin.tagManager");
+        return;
+      }
+      const tagToEdit = tags.find((tag) => tag.id === picked.id);
+      if (!tagToEdit) return;
+      const editPicked = await vscode2.window.showQuickPick([
+        { label: "$(edit) Rename Tag" },
+        { label: "$(symbol-color) Change Color" },
+        { label: "$(trash) Delete Tag" },
+        { label: "Cancel" }
+      ], { placeHolder: `Edit tag: ${tagToEdit.name}` });
+      if (!editPicked || editPicked.label === "Cancel") return;
+      if (editPicked.label === "$(edit) Rename Tag") {
+        const newName = await vscode2.window.showInputBox({
+          prompt: `Rename tag "${tagToEdit.name}"`,
+          value: tagToEdit.name,
+          validateInput: (input) => {
+            if (!input.trim()) return "Tag name cannot be empty";
+            if (tags.some((tag) => tag.name.toLowerCase() === input.trim().toLowerCase() && tag.id !== tagToEdit.id)) {
+              return "Another tag already has this name";
+            }
+            return null;
+          }
+        });
+        if (!newName || newName === tagToEdit.name) return;
+        tagToEdit.name = newName.trim();
+        saveTags(workspaceFolder, tags);
+        pinProvider.refresh();
+        vscode2.window.showInformationMessage(`Tag renamed to "${tagToEdit.name}".`);
+        await vscode2.commands.executeCommand("codepin.tagManager");
+        return;
+      }
+      if (editPicked.label === "$(symbol-color) Change Color") {
+        const newColor = await vscode2.window.showQuickPick([
+          { label: "\u{1F7E5} Red", value: "red" },
+          { label: "\u{1F7E8} Yellow", value: "yellow" },
+          { label: "\u{1F7E6} Blue", value: "blue" },
+          { label: "\u{1F7E9} Green", value: "green" },
+          { label: "\u{1F7EA} Purple", value: "purple" },
+          { label: "\u{1F7E7} Orange", value: "orange" },
+          { label: "\u{1F7EB} Brown", value: "brown" },
+          { label: "\u2B1B Black", value: "black" },
+          { label: "\u2B1C White", value: "white" }
+        ], { placeHolder: "Choose a new tag color" });
+        if (!newColor || newColor.value === tagToEdit.color) return;
+        tagToEdit.color = newColor.value;
+        saveTags(workspaceFolder, tags);
+        pinProvider.refresh();
+        await vscode2.commands.executeCommand("codepin.tagManager");
+        return;
+      }
+      if (editPicked.label === "$(trash) Delete Tag") {
+        const confirm = await vscode2.window.showWarningMessage(
+          `Delete tag "${tagToEdit.name}"? This will remove it from all pins/folders.`,
+          "Delete"
+        );
+        if (confirm !== "Delete") return;
+        const newTags = tags.filter((tag) => tag.id !== tagToEdit.id);
+        removeTagFromAllPinsAndFolders(workspaceFolder, tagToEdit.id);
+        saveTags(workspaceFolder, newTags);
+        pinProvider.refresh();
+        vscode2.window.showInformationMessage(`Tag "${tagToEdit.name}" deleted.`);
+        await vscode2.commands.executeCommand("codepin.tagManager");
+        return;
+      }
+    })
+  );
   const setColor = (color) => async (item) => {
-    const isTeam = item.pin?.type === "team" || item.folder?.type === "team";
-    const pinFilePath = isTeam ? path2.join(workspaceFolder, ".codepin.team.json") : path2.join(workspaceFolder, ".codepin.local.json");
-    if (!fs2.existsSync(pinFilePath)) return;
-    const raw = fs2.readFileSync(pinFilePath, "utf8");
-    let pins = [];
-    let folders = [];
-    try {
-      const parsed = JSON.parse(raw);
-      pins = parsed.pins || [];
-      folders = parsed.folders || [];
-    } catch {
+    let itemsToUpdate = treeView.selection;
+    if (!itemsToUpdate.some((sel) => sel.id === item.id)) {
+      itemsToUpdate = [item];
+    }
+    const types = new Set(
+      itemsToUpdate.map((sel) => sel.pin?.type || sel.folder?.type)
+    );
+    if (types.size > 1) {
+      vscode2.window.showWarningMessage("You can only select pins/folders from either Team or Local at a time.");
       return;
     }
-    if (item.contextValue === "pinItem" || item.pin) {
-      const pin = item.pin ?? item;
+    const groupedByFile = {};
+    for (const sel of itemsToUpdate) {
+      const type = sel.pin?.type || sel.folder?.type;
+      const pinFilePath = type === "team" ? path3.join(workspaceFolder, ".codepin.team.json") : path3.join(workspaceFolder, ".codepin.local.json");
+      if (!groupedByFile[pinFilePath]) {
+        groupedByFile[pinFilePath] = { pins: [], folders: [] };
+      }
+      if (sel.isFolder && sel.folder) groupedByFile[pinFilePath].folders.push(sel.folder);
+      else if (sel.pin) groupedByFile[pinFilePath].pins.push(sel.pin);
+    }
+    for (const [pinFilePath, { pins: pinsToUpdate, folders: foldersToUpdate }] of Object.entries(groupedByFile)) {
+      if (!fs3.existsSync(pinFilePath)) continue;
+      const raw = fs3.readFileSync(pinFilePath, "utf8");
+      let pins = [];
+      let folders = [];
+      try {
+        const parsed = JSON.parse(raw);
+        pins = parsed.pins || [];
+        folders = parsed.folders || [];
+      } catch {
+        continue;
+      }
       pins = pins.map(
-        (p) => p.id === pin.id ? { ...p, color } : p
+        (p) => pinsToUpdate.some((up) => up.id === p.id) ? { ...p, color } : p
       );
-    }
-    if (item.contextValue === "pinFolder" || item.folder) {
-      const folder = item.folder ?? item;
       folders = folders.map(
-        (f) => f.id === folder.id ? { ...f, color } : f
+        (f) => foldersToUpdate.some((up) => up.id === f.id) ? { ...f, color } : f
       );
+      fs3.writeFileSync(pinFilePath, JSON.stringify({ pins, folders }, null, 2), "utf8");
     }
-    fs2.writeFileSync(pinFilePath, JSON.stringify({ pins, folders }, null, 2), "utf8");
     pinProvider.refresh();
   };
   context.subscriptions.push(
@@ -516,18 +822,11 @@ function activate(context) {
       lastSelection = location;
     }
     const isTeam = location === "Team";
-    const newFolder = {
-      id: v4_default(),
-      title: folderTitle,
-      color: folderColor,
-      order: Date.now(),
-      type: isTeam ? "team" : "local"
-    };
-    const pinFilePath = isTeam ? path2.join(workspaceFolder, ".codepin.team.json") : path2.join(workspaceFolder, ".codepin.local.json");
+    const pinFilePath = isTeam ? path3.join(workspaceFolder, ".codepin.team.json") : path3.join(workspaceFolder, ".codepin.local.json");
     let pins = [];
     let folders = [];
-    if (fs2.existsSync(pinFilePath)) {
-      const raw = fs2.readFileSync(pinFilePath, "utf8");
+    if (fs3.existsSync(pinFilePath)) {
+      const raw = fs3.readFileSync(pinFilePath, "utf8");
       try {
         const parsed = JSON.parse(raw);
         pins = parsed.pins || [];
@@ -537,8 +836,15 @@ function activate(context) {
         folders = [];
       }
     }
+    const newFolder = {
+      id: v4_default(),
+      title: folderTitle,
+      color: folderColor,
+      order: folders.length,
+      type: isTeam ? "team" : "local"
+    };
     folders.push(newFolder);
-    fs2.writeFileSync(pinFilePath, JSON.stringify({ pins, folders }, null, 2), "utf8");
+    fs3.writeFileSync(pinFilePath, JSON.stringify({ pins, folders }, null, 2), "utf8");
     pinProvider.refresh();
   });
   const addPinCommand = vscode2.commands.registerCommand("codepin.addPin", async () => {
@@ -547,9 +853,14 @@ function activate(context) {
       vscode2.window.showWarningMessage("No active editor found.");
       return;
     }
-    const position = editor.selection.active;
+    const selection = editor.selection;
     const filePath = editor.document.uri.fsPath;
-    const line = position.line;
+    let line;
+    if (selection.start.line === selection.end.line) {
+      line = selection.start.line;
+    } else {
+      line = [selection.start.line, selection.end.line];
+    }
     const pinTitle = await vscode2.window.showInputBox({
       prompt: "Give your pin a title"
     });
@@ -565,19 +876,11 @@ function activate(context) {
       lastSelection = location;
     }
     const isTeam = location === "Team";
-    const newPin = {
-      id: v4_default(),
-      file: path2.relative(workspaceFolder, filePath),
-      line,
-      title: pinTitle,
-      color: "red",
-      type: isTeam ? "team" : "local"
-    };
-    const pinFilePath = isTeam ? path2.join(workspaceFolder, ".codepin.team.json") : path2.join(workspaceFolder, ".codepin.local.json");
+    const pinFilePath = isTeam ? path3.join(workspaceFolder, ".codepin.team.json") : path3.join(workspaceFolder, ".codepin.local.json");
     let pins = [];
     let folders = [];
-    if (fs2.existsSync(pinFilePath)) {
-      const raw = fs2.readFileSync(pinFilePath, "utf8");
+    if (fs3.existsSync(pinFilePath)) {
+      const raw = fs3.readFileSync(pinFilePath, "utf8");
       try {
         const parsed = JSON.parse(raw);
         pins = parsed.pins || [];
@@ -593,9 +896,28 @@ function activate(context) {
       );
       return;
     }
+    const newPin = {
+      id: v4_default(),
+      file: path3.relative(workspaceFolder, filePath),
+      line,
+      title: pinTitle,
+      color: "red",
+      type: isTeam ? "team" : "local",
+      order: pins.length
+    };
     pins.push(newPin);
-    fs2.writeFileSync(pinFilePath, JSON.stringify({ pins, folders }, null, 2), "utf8");
-    vscode2.window.showInformationMessage(`\u{1F4CD} Pinned "${pinTitle}" at line ${line + 1}`);
+    fs3.writeFileSync(pinFilePath, JSON.stringify({ pins, folders }, null, 2), "utf8");
+    let lineLabel;
+    if (typeof line === "number") {
+      lineLabel = `line ${line + 1}`;
+    } else if (Array.isArray(line)) {
+      const start = Math.min(line[0], line[1]) + 1;
+      const end = Math.max(line[0], line[1]) + 1;
+      lineLabel = `lines ${start}-${end}`;
+    } else {
+      lineLabel = "(unknown line)";
+    }
+    vscode2.window.showInformationMessage(`\u{1F4CD} Pinned "${pinTitle}" at ${lineLabel}`);
     pinProvider.refresh();
   });
   const openPinCommand = vscode2.commands.registerCommand("codepin.openPin", (item) => {
@@ -603,13 +925,28 @@ function activate(context) {
     if (!pin || !pin.file) {
       return;
     }
-    const filePath = path2.join(workspaceFolder, pin.file);
+    const filePath = path3.join(workspaceFolder, pin.file);
     const uri = vscode2.Uri.file(filePath);
     vscode2.workspace.openTextDocument(uri).then((doc) => {
       vscode2.window.showTextDocument(doc).then((editor) => {
-        const position = new vscode2.Position(pin.line, 0);
-        editor.selection = new vscode2.Selection(position, position);
-        editor.revealRange(new vscode2.Range(position, position));
+        let selection;
+        if (typeof pin.line === "number") {
+          const pos = new vscode2.Position(pin.line, 0);
+          selection = new vscode2.Selection(pos, pos);
+        } else if (Array.isArray(pin.line)) {
+          const startLine = Math.min(pin.line[0], pin.line[1]);
+          const endLine = Math.max(pin.line[0], pin.line[1]);
+          const start = new vscode2.Position(startLine, 0);
+          const end = new vscode2.Position(
+            endLine,
+            doc.lineAt(endLine).text.length
+          );
+          selection = new vscode2.Selection(start, end);
+        }
+        if (selection) {
+          editor.selection = selection;
+          editor.revealRange(selection, vscode2.TextEditorRevealType.InCenter);
+        }
       });
     });
   });
@@ -630,7 +967,7 @@ function activate(context) {
     const groupedByFile = {};
     for (const sel of itemsToDelete) {
       const type = sel.pin?.type || sel.folder?.type;
-      const pinFilePath = type === "team" ? path2.join(workspaceFolder, ".codepin.team.json") : path2.join(workspaceFolder, ".codepin.local.json");
+      const pinFilePath = type === "team" ? path3.join(workspaceFolder, ".codepin.team.json") : path3.join(workspaceFolder, ".codepin.local.json");
       if (!groupedByFile[pinFilePath]) {
         groupedByFile[pinFilePath] = { pins: [], folders: [] };
       }
@@ -640,8 +977,8 @@ function activate(context) {
     let totalPins = 0;
     let totalFolders = 0;
     for (const [pinFilePath, { pins: pinsToDelete, folders: foldersToDelete }] of Object.entries(groupedByFile)) {
-      if (!fs2.existsSync(pinFilePath)) continue;
-      const raw = fs2.readFileSync(pinFilePath, "utf8");
+      if (!fs3.existsSync(pinFilePath)) continue;
+      const raw = fs3.readFileSync(pinFilePath, "utf8");
       let pins = [];
       let folders = [];
       try {
@@ -677,7 +1014,7 @@ function activate(context) {
       folders = folders.filter((f) => !folderIdsToDelete.includes(f.id));
       totalPins += pinsSnapshot.length;
       totalFolders += foldersSnapshot.length;
-      fs2.writeFileSync(pinFilePath, JSON.stringify({ pins, folders }, null, 2), "utf8");
+      fs3.writeFileSync(pinFilePath, JSON.stringify({ pins, folders }, null, 2), "utf8");
     }
     pinProvider.refresh();
     const parts = [];
@@ -690,7 +1027,7 @@ function activate(context) {
       let restoredPins = [];
       let restoredFolders = [];
       try {
-        const rawRestore = fs2.readFileSync(pinFilePath, "utf8");
+        const rawRestore = fs3.readFileSync(pinFilePath, "utf8");
         const parsed = JSON.parse(rawRestore);
         restoredPins = parsed.pins || [];
         restoredFolders = parsed.folders || [];
@@ -698,7 +1035,7 @@ function activate(context) {
       }
       restoredPins = [...restoredPins, ...lastDeleted.pins.filter((rp) => !restoredPins.some((p) => p.id === rp.id))];
       restoredFolders = [...restoredFolders, ...lastDeleted.folders.filter((rf) => !restoredFolders.some((f) => f.id === rf.id))];
-      fs2.writeFileSync(pinFilePath, JSON.stringify({ pins: restoredPins, folders: restoredFolders }, null, 2), "utf8");
+      fs3.writeFileSync(pinFilePath, JSON.stringify({ pins: restoredPins, folders: restoredFolders }, null, 2), "utf8");
       pinProvider.refresh();
       vscode2.window.showInformationMessage(`Restored ${parts.join(" and ")}.`);
       lastDeleted = null;
@@ -706,8 +1043,8 @@ function activate(context) {
   });
   const renameCommand = vscode2.commands.registerCommand("codepin.rename", async (item) => {
     const isTeam = item.pin?.type === "team" || item.folder?.type === "team";
-    const pinFilePath = isTeam ? path2.join(workspaceFolder, ".codepin.team.json") : path2.join(workspaceFolder, ".codepin.local.json");
-    if (!fs2.existsSync(pinFilePath)) {
+    const pinFilePath = isTeam ? path3.join(workspaceFolder, ".codepin.team.json") : path3.join(workspaceFolder, ".codepin.local.json");
+    if (!fs3.existsSync(pinFilePath)) {
       return;
     }
     const newTitle = await vscode2.window.showInputBox({
@@ -717,7 +1054,7 @@ function activate(context) {
     if (!newTitle) {
       return;
     }
-    const raw = fs2.readFileSync(pinFilePath, "utf8");
+    const raw = fs3.readFileSync(pinFilePath, "utf8");
     let pins = [];
     let folders = [];
     try {
@@ -736,18 +1073,18 @@ function activate(context) {
         (p) => p.id === item.pin.id ? { ...p, title: newTitle } : p
       );
     }
-    fs2.writeFileSync(pinFilePath, JSON.stringify({ pins, folders }, null, 2), "utf8");
+    fs3.writeFileSync(pinFilePath, JSON.stringify({ pins, folders }, null, 2), "utf8");
     pinProvider.refresh();
   });
   const addNoteCommand = vscode2.commands.registerCommand("codepin.addNote", async (item) => {
     const isFolder = item.isFolder && item.folder;
-    const filePath = isFolder ? item.folder.type === "team" ? path2.join(workspaceFolder, ".codepin.team.json") : path2.join(workspaceFolder, ".codepin.local.json") : item.pin.type === "team" ? path2.join(workspaceFolder, ".codepin.team.json") : path2.join(workspaceFolder, ".codepin.local.json");
-    if (!fs2.existsSync(filePath)) return;
+    const filePath = isFolder ? item.folder.type === "team" ? path3.join(workspaceFolder, ".codepin.team.json") : path3.join(workspaceFolder, ".codepin.local.json") : item.pin.type === "team" ? path3.join(workspaceFolder, ".codepin.team.json") : path3.join(workspaceFolder, ".codepin.local.json");
+    if (!fs3.existsSync(filePath)) return;
     const note = await vscode2.window.showInputBox({
       prompt: "Add a note"
     });
     if (note == null) return;
-    const raw = fs2.readFileSync(filePath, "utf8");
+    const raw = fs3.readFileSync(filePath, "utf8");
     let pins = [];
     let folders = [];
     try {
@@ -762,20 +1099,20 @@ function activate(context) {
     } else if (item.pin) {
       pins = pins.map((p) => p.id === item.pin.id ? { ...p, note } : p);
     }
-    fs2.writeFileSync(filePath, JSON.stringify({ pins, folders }, null, 2), "utf8");
+    fs3.writeFileSync(filePath, JSON.stringify({ pins, folders }, null, 2), "utf8");
     pinProvider.refresh();
   });
   const editNoteCommand = vscode2.commands.registerCommand("codepin.editNote", async (item) => {
     const isFolder = item.isFolder && item.folder;
-    const filePath = isFolder ? item.folder.type === "team" ? path2.join(workspaceFolder, ".codepin.team.json") : path2.join(workspaceFolder, ".codepin.local.json") : item.pin.type === "team" ? path2.join(workspaceFolder, ".codepin.team.json") : path2.join(workspaceFolder, ".codepin.local.json");
-    if (!fs2.existsSync(filePath)) return;
+    const filePath = isFolder ? item.folder.type === "team" ? path3.join(workspaceFolder, ".codepin.team.json") : path3.join(workspaceFolder, ".codepin.local.json") : item.pin.type === "team" ? path3.join(workspaceFolder, ".codepin.team.json") : path3.join(workspaceFolder, ".codepin.local.json");
+    if (!fs3.existsSync(filePath)) return;
     const currentNote = isFolder ? item.folder.note : item.pin.note;
     const note = await vscode2.window.showInputBox({
       prompt: "Edit note",
       value: currentNote || ""
     });
     if (note == null) return;
-    const raw = fs2.readFileSync(filePath, "utf8");
+    const raw = fs3.readFileSync(filePath, "utf8");
     let pins = [];
     let folders = [];
     try {
@@ -790,20 +1127,20 @@ function activate(context) {
     } else if (item.pin) {
       pins = pins.map((p) => p.id === item.pin.id ? { ...p, note } : p);
     }
-    fs2.writeFileSync(filePath, JSON.stringify({ pins, folders }, null, 2), "utf8");
+    fs3.writeFileSync(filePath, JSON.stringify({ pins, folders }, null, 2), "utf8");
     pinProvider.refresh();
   });
   const removeNoteCommand = vscode2.commands.registerCommand("codepin.removeNote", async (item) => {
     const isFolder = item.isFolder && item.folder;
-    const filePath = isFolder ? item.folder.type === "team" ? path2.join(workspaceFolder, ".codepin.team.json") : path2.join(workspaceFolder, ".codepin.local.json") : item.pin.type === "team" ? path2.join(workspaceFolder, ".codepin.team.json") : path2.join(workspaceFolder, ".codepin.local.json");
-    if (!fs2.existsSync(filePath)) return;
+    const filePath = isFolder ? item.folder.type === "team" ? path3.join(workspaceFolder, ".codepin.team.json") : path3.join(workspaceFolder, ".codepin.local.json") : item.pin.type === "team" ? path3.join(workspaceFolder, ".codepin.team.json") : path3.join(workspaceFolder, ".codepin.local.json");
+    if (!fs3.existsSync(filePath)) return;
     const confirm = await vscode2.window.showInformationMessage(
       "Remove note from this item?",
       "Yes",
       "Cancel"
     );
     if (confirm !== "Yes") return;
-    const raw = fs2.readFileSync(filePath, "utf8");
+    const raw = fs3.readFileSync(filePath, "utf8");
     let pins = [];
     let folders = [];
     try {
@@ -818,7 +1155,7 @@ function activate(context) {
     } else if (item.pin) {
       pins = pins.map((p) => p.id === item.pin.id ? { ...p, note: void 0 } : p);
     }
-    fs2.writeFileSync(filePath, JSON.stringify({ pins, folders }, null, 2), "utf8");
+    fs3.writeFileSync(filePath, JSON.stringify({ pins, folders }, null, 2), "utf8");
     pinProvider.refresh();
   });
   context.subscriptions.push(
@@ -831,11 +1168,111 @@ function activate(context) {
     removeNoteCommand
   );
 }
+function colorToEmoji(color) {
+  switch (color) {
+    case "red":
+      return "\u{1F7E5}";
+    case "yellow":
+      return "\u{1F7E8}";
+    case "blue":
+      return "\u{1F7E6}";
+    case "green":
+      return "\u{1F7E9}";
+    case "purple":
+      return "\u{1F7EA}";
+    case "orange":
+      return "\u{1F7E7}";
+    case "brown":
+      return "\u{1F7EB}";
+    case "black":
+      return "\u2B1B";
+    case "white":
+      return "\u2B1C";
+    default:
+      return "";
+  }
+}
+function removeTagFromAllPinsAndFolders(workspaceFolder, tagId) {
+  function updateFile(pinFilePath) {
+    if (!fs3.existsSync(pinFilePath)) return;
+    let pins = [];
+    let folders = [];
+    try {
+      const raw = fs3.readFileSync(pinFilePath, "utf8");
+      const parsed = JSON.parse(raw);
+      pins = parsed.pins || [];
+      folders = parsed.folders || [];
+    } catch {
+      return;
+    }
+    let changed = false;
+    pins = pins.map((pin) => {
+      if (pin.tags && pin.tags.includes(tagId)) {
+        changed = true;
+        return { ...pin, tags: pin.tags.filter((tid) => tid !== tagId) };
+      }
+      return pin;
+    });
+    folders = folders.map((folder) => {
+      if (folder.tags && folder.tags.includes(tagId)) {
+        changed = true;
+        return { ...folder, tags: folder.tags.filter((tid) => tid !== tagId) };
+      }
+      return folder;
+    });
+    if (changed) {
+      fs3.writeFileSync(pinFilePath, JSON.stringify({ pins, folders }, null, 2), "utf8");
+    }
+  }
+  updateFile(path3.join(workspaceFolder, ".codepin.team.json"));
+  updateFile(path3.join(workspaceFolder, ".codepin.local.json"));
+}
+function searchPinsAndFoldersQuickInput(pins, folders, onPick) {
+  const quickInput = vscode2.window.createQuickPick();
+  quickInput.placeholder = "Search pins and folders by name or note...";
+  function getLabel(item) {
+    return item.title || item.name || "";
+  }
+  function updateItems(filter) {
+    const lower = filter.toLowerCase();
+    const pinItems = pins.filter((pin) => pin.title.toLowerCase().includes(lower) || pin.note?.toLowerCase().includes(lower)).map((pin) => ({
+      label: `$(pin) ${pin.title}`,
+      description: pin.type === "team" ? "Team Pin" : "Local Pin",
+      detail: pin.note || "",
+      alwaysShow: true,
+      pin
+    }));
+    const folderItems = folders.filter((folder) => folder.title.toLowerCase().includes(lower) || folder.note?.toLowerCase().includes(lower)).map((folder) => ({
+      label: `$(folder) ${folder.title}`,
+      description: folder.type === "team" ? "Team Folder" : "Local Folder",
+      detail: folder.note || "",
+      alwaysShow: true,
+      folder
+    }));
+    quickInput.items = [...folderItems, ...pinItems];
+  }
+  quickInput.onDidChangeValue((filter) => {
+    updateItems(filter);
+  });
+  quickInput.onDidAccept(() => {
+    const selected = quickInput.selectedItems[0];
+    if (selected.pin) {
+      onPick(selected.pin, void 0);
+    } else if (selected.folder) {
+      onPick(void 0, selected.folder);
+    }
+    quickInput.hide();
+  });
+  quickInput.onDidHide(() => quickInput.dispose());
+  updateItems("");
+  quickInput.show();
+}
 function deactivate() {
 }
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
   activate,
+  colorToEmoji,
   deactivate
 });
 //# sourceMappingURL=extension.js.map
