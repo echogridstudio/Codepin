@@ -1,7 +1,7 @@
 {
   "name": "codepin",
   "displayName": "Codepin",
-  "description": "Pin code and notes for faster dev workflows",
+  "description": "Pin code and notes for faster workflows",
   "version": "0.0.1",
   "engines": {
     "vscode": "^1.102.0"
@@ -16,7 +16,11 @@
     "onCommand:codepin.openPin",
     "onCommand:codepin.delete",
     "onCommand:codepin.rename",
+    "onCommand:codepin.addNote",
+    "onCommand:codepin.editNote",
+    "onCommand:codepin.removeNote",
     "onCommand:codepin.changeColor",
+    "onCommand:codepin.assignTag",
     "onView:codepinView"
   ],
   "contributes": {
@@ -24,45 +28,56 @@
       "type": "object",
       "title": "Codepin",
       "properties": {
+        "codepin.proLicenseKey": {
+          "type": "string",
+          "default": "",
+          "description": "Enter your Codepin Pro license key to unlock Pro features"
+        },
         "codepin.showFullPath": {
           "type": "boolean",
-          "default": false,
+          "default": true,
           "description": "Show the full file path in pin labels"
         },
         "codepin.openPinOnClick": {
-        "type": "boolean",
-        "default": true,
-        "description": "Open pinned file when clicking the pin in the sidebar. Disable to only open with right-click menu."
+          "type": "boolean",
+          "default": true,
+          "description": "Open pinned file when clicking the pin in the sidebar. Disable to only open with right-click menu."
         },
         "codepin.showTagColors": {
-        "type": "boolean",
-        "default": true,
-        "description": "Show colored icons for tags in the sidebar"
+          "type": "boolean",
+          "default": true,
+          "description": "Show colored icons for tags in the sidebar"
         }
       }
     },
-    "submenus": [
-      {
-        "id": "codepin.changeColorSubmenu",
-        "label": "Change Color"
-      },
-      { 
-        "id": "codepin.changeColorSubmenu", 
-        "label": "Change Color" 
-      }
-    ],
     "keybindings": [
       {
         "command": "codepin.addPin",
         "key": "ctrl+alt+p",
         "when": "editorTextFocus"
+      },
+      {
+        "title": "Codepin: Add Folder",
+        "command": "codepin.addPinFolder",
+        "key": "ctrl+alt+f"
+      },
+      {
+        "title": "Codepin: Tag Manager",
+        "command": "codepin.tagManager",
+        "key": "ctrl+alt+t"
+      },
+      {
+        "title": "Codepin: Search",
+        "command": "codepin.search",
+        "key": "ctrl+alt+s"
       }
     ],
     "views": {
       "explorer": [
         {
           "id": "codepinView",
-          "name": "Codepins"
+          "name": "Codepins",
+          "icon": ""
         }
       ]
     },
@@ -76,7 +91,7 @@
       ],
       "view/item/context": [
         {
-          "submenu": "codepin.changeColorSubmenu",
+          "command": "codepin.setColor",
           "when": "view == codepinView && (viewItem == pinItem || viewItem == pinItemWithNote || viewItem == pinFolder || viewItem == pinFolderWithNote)",
           "group": "navigation@5"
         },
@@ -132,50 +147,20 @@
           "when": "view == codepinView",
           "group": "navigation@0"
         }
-      ],
-      "codepin.changeColorSubmenu": [
-        {
-          "command": "codepin.setColorBlue",
-          "when": "view == codepinView && (viewItem == pinItem || viewItem == pinItemWithNote || viewItem == pinFolder || viewItem == pinFolderWithNote)"
-        },
-        {
-          "command": "codepin.setColorGreen",
-          "when": "view == codepinView && (viewItem == pinItem || viewItem == pinItemWithNote || viewItem == pinFolder || viewItem == pinFolderWithNote)"
-        },
-        {
-          "command": "codepin.setColorPurple",
-          "when": "view == codepinView && (viewItem == pinItem || viewItem == pinItemWithNote || viewItem == pinFolder || viewItem == pinFolderWithNote)"
-        },
-        {
-          "command": "codepin.setColorRed",
-          "when": "view == codepinView && (viewItem == pinItem || viewItem == pinItemWithNote || viewItem == pinFolder || viewItem == pinFolderWithNote)"
-        },
-        {
-          "command": "codepin.setColorYellow",
-          "when": "view == codepinView && (viewItem == pinItem || viewItem == pinItemWithNote || viewItem == pinFolder || viewItem == pinFolderWithNote)"
-        },
-        {
-          "command": "codepin.setColorOrange",
-          "when": "view == codepinView && (viewItem == pinItem || viewItem == pinItemWithNote || viewItem == pinFolder || viewItem == pinFolderWithNote)"
-        },
-        {
-          "command": "codepin.setColorBrown",
-          "when": "view == codepinView && (viewItem == pinItem || viewItem == pinItemWithNote || viewItem == pinFolder || viewItem == pinFolderWithNote)"
-        },
-        {
-          "command": "codepin.setColorBlack",
-          "when": "view == codepinView && (viewItem == pinItem || viewItem == pinItemWithNote || viewItem == pinFolder || viewItem == pinFolderWithNote)"
-        },
-        {
-          "command": "codepin.setColorWhite",
-          "when": "view == codepinView && (viewItem == pinItem || viewItem == pinItemWithNote || viewItem == pinFolder || viewItem == pinFolderWithNote)"
-        }
       ]
     },
     "commands": [
       {
+        "command": "codepin.deactivateProLicense",
+        "title": "Codepin: Deactivate Pro License"
+      },
+      {
+        "command": "codepin.enterProLicenseKey",
+        "title": "Codepin: Enter Pro License Key"
+      },
+      {
         "command": "codepin.search",
-        "title": "Search Pins and Folders",
+        "title": "Search",
         "icon": "$(search)"
       },
       {
@@ -186,52 +171,20 @@
       {
         "command": "codepin.addPinFolder",
         "title": "New Folder",
-        "icon": "$(new-folder)" 
+        "icon": "$(new-folder)"
       },
       {
         "command": "codepin.tagManager",
         "title": "Tag Manager",
-        "icon": "$(tag)" 
+        "icon": "$(tag)"
       },
       {
-        "command": "codepin.setColorRed",
-        "title": "🔴 Red"
-      },
-      {
-        "command": "codepin.setColorBlue",
-        "title": "🔵 Blue"
-      },
-      {
-        "command": "codepin.setColorGreen",
-        "title": "🟢 Green"
-      },
-      {
-        "command": "codepin.setColorYellow",
-        "title": "🟡 Yellow"
-      },
-      {
-        "command": "codepin.setColorOrange",
-        "title": "🟠 Orange"
-      },
-      {
-        "command": "codepin.setColorBrown",
-        "title": "🟤 Brown"
-      },
-      {
-        "command": "codepin.setColorPurple",
-        "title": "🟣 Purple"
-      },
-      {
-        "command": "codepin.setColorBlack",
-        "title": "⚫ Black"
-      },
-      {
-        "command": "codepin.setColorWhite",
-        "title": "⚪ White"
+        "command": "codepin.setColor",
+        "title": "Change Color"
       },
       {
         "command": "codepin.addPin",
-        "title": "Add Code Pin"
+        "title": "Add Pin"
       },
       {
         "command": "codepin.openPin",

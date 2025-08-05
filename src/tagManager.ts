@@ -17,7 +17,7 @@ export interface TagQuickPickItem extends vscode.QuickPickItem {
 
 export function loadTags(workspaceRoot: string): CodepinTag[] {
   const tagsPath = path.join(workspaceRoot, TAGS_FILE);
-  if (!fs.existsSync(tagsPath)) return [];
+  if (!fs.existsSync(tagsPath)) {return [];}
   try {
     const content = fs.readFileSync(tagsPath, 'utf8');
     return JSON.parse(content) as CodepinTag[];

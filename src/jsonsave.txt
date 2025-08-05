@@ -1,5 +1,0 @@
-{
-          "command": "codepin.addPinFolder",
-          "when": "view == codepinView",
-          "group": "navigation@3"
-        },
