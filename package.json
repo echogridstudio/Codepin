@@ -1,18 +1,40 @@
 {
   "name": "codepin",
   "displayName": "Codepin",
-  "description": "Pin code and notes for faster workflows",
-  "version": "0.0.1",
+  "description": "Pin, organize, and instantly jump to your most important code.",
+  "version": "1.0.0",
+  "publisher": "echogridstudio",
   "repository": {
     "type": "git",
-    "url": "https://github.com/echogridstudio/Codepin.git"
+    "url": "https://github.com/echogridstudio/Codepin"
   },
+  "bugs": {
+    "url": "https://github.com/echogridstudio/Codepin/issues"
+  },
+  "icon": "media/Codepin_NOBG_128x128.png",
+  "license": "MIT",
+  "homepage": "https://github.com/echogridstudio/Codepin",
   "engines": {
     "vscode": "^1.102.0"
   },
   "categories": [
     "Other"
   ],
+   "keywords": [
+    "pin", 
+    "bookmark", 
+    "notes",
+    "navigation", 
+    "organization", 
+    "folders", 
+    "tags",
+    "color",
+    "Productivity"
+  ],
+  "galleryBanner": {
+  "color": "#24292e",
+  "theme": "dark"
+  },
   "main": "./dist/extension.js",
   "activationEvents": [
     "onCommand:codepin.addPin",
