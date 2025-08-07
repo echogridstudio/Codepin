@@ -7,7 +7,9 @@ Pin, organize, and instantly jump to your most important code.
 
 - Keep notes and tags attached to your pins & folders, not scattered in comments.
 
-- Organize your workflow, whether you’re working alone or sharing things with your team.
+- Organize your workflow, whether you’re working alone or sharing things with your team.  
+
+![Teaser](media/Codepin_hook.gif)
 
 ## Free vs Pro Summary
 
