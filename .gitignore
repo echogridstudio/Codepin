@@ -1,1 +1,18 @@
+# Node & build artifacts
+node_modules/
+dist/
+out/
+coverage/
+*.vsix
+
+# User/workspace settings
+.vscode/
 .codepin.local.json
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+
+# Logs/temp
+npm-debug.log*
+yarn-error.log*

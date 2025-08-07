@@ -103,7 +103,7 @@
         {
           "id": "codepinView",
           "name": "Codepins",
-          "icon": ""
+          "icon": "media/Codepin_NOBG_128x128"
         }
       ]
     },
@@ -176,10 +176,6 @@
       ]
     },
     "commands": [
-      {
-        "command": "codepin.deactivateProLicense",
-        "title": "Codepin: Deactivate Pro License"
-      },
       {
         "command": "codepin.enterProLicenseKey",
         "title": "Codepin: Enter Pro License Key"

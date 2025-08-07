@@ -38,7 +38,7 @@ export function activate(context: vscode.ExtensionContext) {
             pinProvider.refresh();
         }
     });
-
+    
     const treeView = vscode.window.createTreeView('codepinView', {
         treeDataProvider: pinProvider,
         canSelectMany: true,
@@ -89,22 +89,6 @@ export function activate(context: vscode.ExtensionContext) {
     });
     context.subscriptions.push(enterLicenseCommand);
 
-    const deactivateLicenseCommand = vscode.commands.registerCommand('codepin.deactivateProLicense', async () => {
-        const confirm = await vscode.window.showWarningMessage(
-            "Are you sure you want to deactivate your Pro license? This will lock all Pro features.",
-            { modal: true },
-            "Deactivate"
-        );
-        if (confirm !== "Deactivate") {return;}
-
-        await context.globalState.update('codepinProUnlocked', false);
-        await vscode.workspace.getConfiguration("codepin").update("proLicenseKey", "", vscode.ConfigurationTarget.Global);
-        vscode.window.showInformationMessage("Codepin Pro has been deactivated. Codepin Free restored.");
-        vscode.commands.executeCommand('workbench.view.explorer');
-        pinProvider.refresh();
-    });
-    context.subscriptions.push(deactivateLicenseCommand);
-
     async function validateGumroadLicense(licenseKey: string): Promise<boolean> {
         const response = await fetch('https://api.gumroad.com/v2/licenses/verify', {
             method: 'POST',
@@ -123,6 +107,22 @@ export function activate(context: vscode.ExtensionContext) {
         console.log("Gumroad API response:", data);
         return data.success && data.purchase && !data.purchase.refunded && !data.purchase.chargebacked && !data.purchase.disputed && !data.purchase.subscription_cancelled;
     }
+
+        // const deactivateLicenseCommand = vscode.commands.registerCommand('codepin.deactivateProLicense', async () => {
+        //     const confirm = await vscode.window.showWarningMessage(
+        //         "Are you sure you want to deactivate your Pro license? This will lock all Pro features.",
+        //         { modal: true },
+        //         "Deactivate"
+        //     );
+        //     if (confirm !== "Deactivate") { return; }
+
+        //     await context.globalState.update('codepinProUnlocked', false);
+        //     await vscode.workspace.getConfiguration("codepin").update("proLicenseKey", "", vscode.ConfigurationTarget.Global);
+        //     vscode.window.showInformationMessage("Codepin Pro has been deactivated. Codepin Free restored.");
+        //     vscode.commands.executeCommand('workbench.view.explorer');
+        //     pinProvider.refresh();
+        // });
+        // context.subscriptions.push(deactivateLicenseCommand);
 
     // MAIN COMMANDS & UI 
 
@@ -457,7 +457,6 @@ export function activate(context: vscode.ExtensionContext) {
             );
             if (!colorPick) {return;}
 
-            // Block pro colors for Free
             if (!isPro && !FREE_COLORS.some(c => c.value === colorPick.value)) {
                 showUpgradePrompt('Unlock more colors with Codepin Pro!');
                 return;
@@ -467,26 +466,36 @@ export function activate(context: vscode.ExtensionContext) {
     );
 
     // Add Folder Command
+    const LAST_MODE_KEY = "codepin.lastWorkspaceMode";
+    type LocationMode = "Local" | "Team";
+
     const addFolderCommand = vscode.commands.registerCommand('codepin.addPinFolder', async () => {
         const folderTitle = await vscode.window.showInputBox({ prompt: "Folder name" });
-        if (!folderTitle) {return;}
+        if (!folderTitle) { return; }
 
         const isPro = isProUnlocked(getExtensionContext());
         const folderColorPick = await vscode.window.showQuickPick(
             isPro ? ALL_COLORS : FREE_COLORS,
             { placeHolder: 'Choose a folder color' }
         );
-        if (!folderColorPick) {return;}
+        if (!folderColorPick) { return; }
         const folderColor = folderColorPick.value;
 
         let isTeam = false;
-        if (isProUnlocked(context)) {
-            const options = ['Local', 'Team'];
+        if (isPro) {
+            const context = getExtensionContext();
+            const lastUsed = (context.globalState.get<LocationMode>(LAST_MODE_KEY)) || "Local";
+            const options: LocationMode[] = lastUsed === "Team" ? ["Team", "Local"] : ["Local", "Team"];
+
             const location = await vscode.window.showQuickPick(options, {
                 placeHolder: 'Where do you want to add this pin/folder?'
             });
-            if (!location) {return;}
-            isTeam = location === 'Team';
+            if (!location) { return; }
+
+            // Store new selection as last used
+            await context.globalState.update(LAST_MODE_KEY, location);
+
+            isTeam = location === "Team";
         }
 
         const pinFilePath = isTeam ? path.join(workspaceFolder, ".codepin.team.json") : path.join(workspaceFolder, ".codepin.local.json");
@@ -521,6 +530,7 @@ export function activate(context: vscode.ExtensionContext) {
         };
 
         folders.push(newFolder);
+        reindexFolderOrders(folders);
         fs.writeFileSync(pinFilePath, JSON.stringify({ pins, folders }, null, 2), 'utf8');
         vscode.window.showInformationMessage(`📁 Folder "${folderTitle}" added!`);
         pinProvider.refresh();
@@ -557,17 +567,24 @@ export function activate(context: vscode.ExtensionContext) {
             isPro ? ALL_COLORS : FREE_COLORS,
             { placeHolder: 'Choose a pin color' }
         );
-        if (!pinColorPick) {return;}
+        if (!pinColorPick) { return; }
         const pinColor = pinColorPick.value;
 
         let isTeam = false;
-        if (isProUnlocked(context)) {
-            const options = ['Local', 'Team'];
+        if (isPro) {
+            const context = getExtensionContext();
+            const lastUsed = (context.globalState.get<LocationMode>(LAST_MODE_KEY)) || "Local";
+            const options: LocationMode[] = lastUsed === "Team" ? ["Team", "Local"] : ["Local", "Team"];
+
             const location = await vscode.window.showQuickPick(options, {
                 placeHolder: 'Where do you want to add this pin/folder?'
             });
-            if (!location) {return;}
-            isTeam = location === 'Team';
+            if (!location) { return; }
+
+            // Store new selection as last used
+            await context.globalState.update(LAST_MODE_KEY, location);
+
+            isTeam = location === "Team";
         }
 
         const pinFilePath = isTeam ? path.join(workspaceFolder, ".codepin.team.json") : path.join(workspaceFolder, ".codepin.local.json");
@@ -594,6 +611,9 @@ export function activate(context: vscode.ExtensionContext) {
             return;
         }
 
+        const parentFolderId = null;
+        const siblingPins = pins.filter(p => (p.parentFolderId ?? null) === parentFolderId);
+
         const newPin: CodePin = {
             id: uuidv4(),
             file: path.relative(workspaceFolder, filePath),
@@ -601,10 +621,12 @@ export function activate(context: vscode.ExtensionContext) {
             title: pinTitle,
             color: pinColor,
             type: isTeam ? "team" : "local",
-            order: pins.length
+            parentFolderId,
+            order: siblingPins.length
         };
 
         pins.push(newPin);
+        reindexOrders(pins, parentFolderId);
         fs.writeFileSync(pinFilePath, JSON.stringify({ pins, folders }, null, 2), "utf8");
 
         let lineLabel: string;
@@ -942,6 +964,27 @@ export function colorToEmoji(color: string): string {
         default: return '';
     }
 }
+
+function reindexOrders(pins: CodePin[], parentFolderId: string | null) {
+    const siblings = pins.filter(p => (p.parentFolderId ?? null) === parentFolderId);
+    siblings.sort((a, b) => {
+        const orderA = typeof a.order === "number" ? a.order : 0;
+        const orderB = typeof b.order === "number" ? b.order : 0;
+        return orderA - orderB;
+    });
+    siblings.forEach((p, idx) => p.order = idx);
+}
+
+export function reindexFolderOrders(folders: CodePinFolder[]) {
+    folders.sort((a, b) => {
+        const orderA = typeof a.order === "number" ? a.order : 0;
+        const orderB = typeof b.order === "number" ? b.order : 0;
+        return orderA - orderB;
+    });
+    folders.forEach((f, idx) => f.order = idx);
+}
+
+
 
 function removeTagFromAllPinsAndFolders(workspaceFolder: string, tagId: string) {
     function updateFile(pinFilePath: string) {

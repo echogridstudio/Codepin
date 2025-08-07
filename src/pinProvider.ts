@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
 import { loadTags, CodepinTag } from './tagManager';
-import { colorToEmoji } from './extension';
+import { colorToEmoji, reindexFolderOrders } from './extension';
 import { isProUnlocked } from './utils';
 import { getExtensionContext } from './extensionContext';
 
@@ -132,7 +132,7 @@ export class PinProvider implements vscode.TreeDataProvider<PinItem>, vscode.Tre
     private _onDidChangeTreeData: vscode.EventEmitter<PinItem | undefined | void> = new vscode.EventEmitter<PinItem | undefined | void>();
     readonly onDidChangeTreeData: vscode.Event<PinItem | undefined | void> = this._onDidChangeTreeData.event;
 
-    // Flat list, not always used — only for rare lookups
+    // List for rare lookups
     public pins: CodePin[] = [];
     public folders: CodePinFolder[] = [];
 
@@ -152,7 +152,7 @@ export class PinProvider implements vscode.TreeDataProvider<PinItem>, vscode.Tre
         return element;
     }
 
-    // Load Pins and Folders from Disk
+    // Load Pins and Folders from disk
     loadData() {
         // Team
         if (fs.existsSync(this.teamFile)) {
@@ -213,7 +213,7 @@ export class PinProvider implements vscode.TreeDataProvider<PinItem>, vscode.Tre
         return undefined;
     }
 
-    // Build the Visual Tree Structure
+    // Build the Visual Tree
 
     async getChildren(element?: PinItem): Promise<PinItem[]> {
         const openOnClick = vscode.workspace.getConfiguration('codepin').get('openPinOnClick', true);
@@ -258,7 +258,7 @@ export class PinProvider implements vscode.TreeDataProvider<PinItem>, vscode.Tre
             }
         }
 
-        // Folders & root Pins
+        // Folders & Root Pins
         if (element.label === 'Team') {
             const folders = this.teamFolders
                 .sort((a, b) => (a.order ?? 0) - (b.order ?? 0))
@@ -441,18 +441,30 @@ export class PinProvider implements vscode.TreeDataProvider<PinItem>, vscode.Tre
     // Drag n drop
 
     movePinRelativeToPin(movedPin: CodePin, targetPin: CodePin, pins: CodePin[]) {
-        if (movedPin.parentFolderId !== targetPin.parentFolderId) {return;}
+        if (movedPin.parentFolderId !== targetPin.parentFolderId) { return; }
 
-        const pinA = pins.find(p => p.id === movedPin.id);
-        const pinB = pins.find(p => p.id === targetPin.id);
+        // Find all siblings (same parent)
+        const siblings = pins.filter(p => p.parentFolderId === movedPin.parentFolderId);
 
-        if (!pinA || !pinB || typeof pinA.order !== "number" || typeof pinB.order !== "number") {return;}
+        // Ensure unique, contiguous order (fix any legacy weirdness)
+        siblings.sort((a, b) => {
+            const orderA = typeof a.order === "number" ? a.order : 0;
+            const orderB = typeof b.order === "number" ? b.order : 0;
+            return orderA - orderB;
+        });
+        siblings.forEach((p, idx) => p.order = idx);
 
+        // Find pins again after normalizing order
+        const pinA = siblings.find(p => p.id === movedPin.id);
+        const pinB = siblings.find(p => p.id === targetPin.id);
+
+        if (!pinA || !pinB) { return; }
+
+        // Swap their order
         const tempOrder = pinA.order;
         pinA.order = pinB.order;
         pinB.order = tempOrder;
     }
-
 
     moveFolderRelativeToFolder(movedFolder: CodePinFolder, targetFolder: CodePinFolder, folders: CodePinFolder[]) {
         const folderA = folders.find(f => f.id === movedFolder.id);
@@ -463,6 +475,8 @@ export class PinProvider implements vscode.TreeDataProvider<PinItem>, vscode.Tre
         const tempOrder = folderA.order;
         folderA.order = folderB.order;
         folderB.order = tempOrder;
+
+        reindexFolderOrders(folders);
     }
 
 

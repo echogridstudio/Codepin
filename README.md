@@ -9,6 +9,21 @@ Pin, organize, and instantly jump to your most important code.
 
 - Organize your workflow, whether you’re working alone or sharing things with your team.
 
+## Free vs Pro Summary
+
+### ✨ Codepin Free
+- Up to 20 pins per workspace
+- Up to 5 folders per workspace
+- Up to 5 tags per workspace
+- Up to 5 colors for tags, pins, and folders 🟥🟨🟦🟩🟪
+- Unlimited notes
+
+### ⭐ Codepin Pro 
+- Everything in Free, plus:
+- Unlimited pins, folders, tags, and colors 🟧🟫⬛⬜
+- Multiline pinning
+- Team & Local mode (easily switch between private and shared pins/folders)
+
 ## ✨ Features
 
 #### 📌 Add Pins
@@ -45,30 +60,15 @@ Pin, organize, and instantly jump to your most important code.
 
 ![Undo Preview](media/Codepin_undo.gif)
 
-## ⭐ Codepin Pro Features
-
-## ✨ Codepin Free
-- Up to 20 pins per workspace
-- Up to 5 folders per workspace
-- Up to 5 tags per workspace
-- Up to 5 colors for tags, pins, and folders 🟥🟨🟦🟩🟪
-- Unlimited notes
-
-## ⭐ Codepin Pro 
-- Everything in Free, plus:
-- Unlimited pins, folders, tags, and colors 🟧🟫⬛⬜
-- Multiline pinning
-- Team & Local mode (easily switch between private and shared pins/folders)
-
-#### ⭐ Pin with multiline support
-- Pin sections or blocks with multiline support, not just single lines.
-
-![Multiline Preview](media/Codepin_multiline.gif)
-
-#### ⭐ Team & Local
+#### ⭐ Team & Local <sup>(Pro)</sup>
 - With a Codepin Pro License, you can switch between **Local** pins (just for you) and **Team** pins (shared with everyone in your workspace).
 
 ![Team & Local Preview](media/Codepin_teamfeature.gif)
+
+#### ⭐ Pin with multiline support <sup>(Pro)</sup>
+- Pin sections or blocks with multiline support, not just single lines.
+
+![Multiline Preview](media/Codepin_multiline.gif)
 
 ## 🛠️ Getting started
 
@@ -108,7 +108,7 @@ Pin, organize, and instantly jump to your most important code.
 
 - Purchase your Pro license on [Gumroad](https://echogrid.gumroad.com/l/codepinprolicensekey).
 
-- Enter your license key in the extension (via the Command Palette).
+- Paste your license key through the Command Palette by typing "Codepin: Enter Pro License Key".
 
 - Enjoy unlimited pins, folders, and all Pro features!
 

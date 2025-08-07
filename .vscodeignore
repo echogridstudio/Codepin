@@ -1,14 +1,24 @@
-.vscode/**
-.vscode-test/**
-out/**
-node_modules/**
-src/**
+# Exclude dev and build folders
+.vscode/
+.vscode-test/
+src/
+node_modules/
+out/
+test/
+coverage/
+
+# Exclude build/config files
 .gitignore
 .yarnrc
 esbuild.js
 vsc-extension-quickstart.md
-**/tsconfig.json
-**/eslint.config.mjs
-**/*.map
-**/*.ts
-**/.vscode-test.*
+tsconfig.json
+eslint.config.mjs
+*.map
+*.ts
+
+# Exclude OS & temp files
+.DS_Store
+Thumbs.db
+npm-debug.log*
+yarn-error.log*
